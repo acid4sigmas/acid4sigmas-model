@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod db;
 
 #[macro_export]
 macro_rules! to_string_ {

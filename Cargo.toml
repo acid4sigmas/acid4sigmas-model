@@ -7,3 +7,5 @@ edition = "2021"
 regex = "1.11.0"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
+sqlx = { version = "0.8.2", features = ["postgres"] }
+acid4sigmas-attr = { git = "https://github.com/acid4sigmas/acid4sigmas-attr.git" }

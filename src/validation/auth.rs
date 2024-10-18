@@ -6,8 +6,6 @@ use crate::{
 
 use regex::Regex;
 
-#[macro_use]
-use crate::validation::*;
 
 impl RegisterRequest {
     pub fn validate(&self) -> Result<(), String> {
