@@ -15,10 +15,12 @@ pub trait TableModel: Send + Sync {
 
 pub type ModelFactory = fn(&PgRow) -> Box<dyn TableModel + Send + Sync>;
 
+#[derive(Debug)]
 pub struct ModelEntry {
     pub factory: ModelFactory,
 }
 
+#[derive(Debug)]
 pub struct ModelRegistry {
     pub models: HashMap<&'static str, ModelEntry>,
 }
