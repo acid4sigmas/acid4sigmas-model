@@ -98,11 +98,22 @@ impl QueryBuilder {
 
         let mut bind_index = 1;
 
+
+        // putting it all together
         if let Some(filters) = &self.filters {
-            println!("Filters: {:?}", filters);
+
             let (where_clause_sql, bind_values) = filters.build_where_caluse(&mut bind_index)?;
             query.push_str(&where_clause_sql);
             self.bind_params.extend(bind_values);
+
+            let order_by_sql = filters.build_order_by()?;
+            query.push_str(&order_by_sql);
+
+            let limit_sql = filters.build_limit()?;
+            query.push_str(&limit_sql);
+
+            let offset_sql = filters.build_offset()?;
+            query.push_str(&offset_sql);
 
         }
 
@@ -142,5 +153,34 @@ impl Filters {
             Ok((String::new(), Vec::new()))  // if no conditions, return an empty WHERE clause
         }
 
+    }
+
+    pub fn build_order_by(&self) -> Result<String> {
+        if let Some(order_by) = &self.order_by {
+            let sanitized_column = Self::sanitize_column_name(&order_by.column)?;
+            let direction = match order_by.direction {
+                OrderDirection::Asc => "ASC",
+                OrderDirection::Desc => "DESC",
+            };
+            Ok(format!(" ORDER BY {} {}", sanitized_column, direction))
+        } else {
+            Ok(String::new()) // no ORDER BY clause if not specified
+        }
+    }
+
+    pub fn build_limit(&self) -> Result<String> {
+        if let Some(limit) = self.limit {
+            Ok(format!(" LIMIT {}", limit))
+        } else {
+            Ok(String::new()) // no LIMIT clause if not specified  
+        }
+    }
+
+    pub fn build_offset(&self) -> Result<String> {
+        if let Some(offset) = self.offset {
+            Ok(format!(" OFFSET {}", offset))
+        } else {
+            Ok(String::new())
+        }
     }
 }
