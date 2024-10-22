@@ -1,4 +1,5 @@
 pub mod db;
+pub mod macros;
 pub mod models;
-mod utils;
+pub mod utils;
 mod validation;
