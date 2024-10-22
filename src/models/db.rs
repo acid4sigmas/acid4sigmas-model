@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 // the actions we perform for the database
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DatabaseAction {
     Insert,
     Delete,
@@ -46,6 +46,9 @@ pub struct DatabaseRequest {
 
 pub struct QueryBuilder {
     pub table: String,
+    pub action: DatabaseAction,
     pub filters: Option<Filters>,
-    pub bind_params: Vec<Value>
+    pub values: Option<HashMap<String, Value>>,
+    pub table_columns: Option<HashMap<String, String>>,
+    pub bind_params: Vec<Value>,
 }

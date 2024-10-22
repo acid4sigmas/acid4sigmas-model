@@ -44,12 +44,15 @@ impl Default for Filters {
 
 impl DatabaseRequest {
     pub fn validate(&mut self) -> Result<(), String> {
-
         // eleminate spaces
         self.table = self.table.split_whitespace().collect::<String>();
 
-        // check if all characters are either a-z 0-9 or contain a '_' 
-        if !self.table.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        // check if all characters are either a-z 0-9 or contain a '_'
+        if !self
+            .table
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
             return Err(to_string_!("Table name contains invalid characters. Only alphanumeric characters and underscores are allowed."));
         }
 
@@ -70,117 +73,7 @@ impl DatabaseRequest {
             }
             DatabaseAction::Retrieve => {}
         }
+
         Ok(())
-    }
-}
-
-impl QueryBuilder {
-    pub fn new(table: String, filters: Option<Filters>) -> Self {
-        Self {
-            table,
-            filters,
-            bind_params: Vec::new(),
-        }
-    }
-
-    pub fn build_query(&mut self) -> Result<(String, Vec<Value>)> {
-        /* 
-        ==========================================
-        = DANGER: POTENTIAL SQL INJECTION RISK! =
-        ==========================================
-        */
-        // if you are directly embedding table names in queries, 
-        // this can make your code VULNERABLE TO SQL INJECTION ATTEMPTS.
-        // if you use the DatabaseRequest::validate() function 
-        // and provide the table argument only if the validate function passed, 
-        // you should have nothing to worry about.
-        let mut query = format!("SELECT * FROM {}", self.table);
-
-        let mut bind_index = 1;
-
-
-        // putting it all together
-        if let Some(filters) = &self.filters {
-
-            let (where_clause_sql, bind_values) = filters.build_where_caluse(&mut bind_index)?;
-            query.push_str(&where_clause_sql);
-            self.bind_params.extend(bind_values);
-
-            let order_by_sql = filters.build_order_by()?;
-            query.push_str(&order_by_sql);
-
-            let limit_sql = filters.build_limit()?;
-            query.push_str(&limit_sql);
-
-            let offset_sql = filters.build_offset()?;
-            query.push_str(&offset_sql);
-
-        }
-
-        Ok((query, self.bind_params.clone()))
-    }
-
-}
-
-impl Filters {
-    fn sanitize_column_name(column: &str) -> Result<String> {
-        let is_valid = column.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-        if !is_valid {
-            return Err(anyhow::anyhow!("Invalid column name: {}", column));
-        }
-        Ok(column.to_string())
-    }
-
-    pub fn build_where_caluse(&self, bind_index: &mut usize) -> Result<(String, Vec<Value>)>{
-        let mut conditions = Vec::new();
-        let mut bind_values = Vec::new();
-
-        if let Some(where_clause) = &self.where_clause {
-            for (column, value) in where_clause {
-                let sanitized_column = Self::sanitize_column_name(column)?;
-
-                let condition = format!("{} = ${}", sanitized_column, *bind_index);
-                conditions.push(condition);
-
-                bind_values.push(value.clone());  
-                *bind_index += 1; 
-            }
-        }
-
-        if !conditions.is_empty() {
-            Ok((format!(" WHERE {}", conditions.join(" AND ")), bind_values))
-        } else {
-            Ok((String::new(), Vec::new()))  // if no conditions, return an empty WHERE clause
-        }
-
-    }
-
-    pub fn build_order_by(&self) -> Result<String> {
-        if let Some(order_by) = &self.order_by {
-            let sanitized_column = Self::sanitize_column_name(&order_by.column)?;
-            let direction = match order_by.direction {
-                OrderDirection::Asc => "ASC",
-                OrderDirection::Desc => "DESC",
-            };
-            Ok(format!(" ORDER BY {} {}", sanitized_column, direction))
-        } else {
-            Ok(String::new()) // no ORDER BY clause if not specified
-        }
-    }
-
-    pub fn build_limit(&self) -> Result<String> {
-        if let Some(limit) = self.limit {
-            Ok(format!(" LIMIT {}", limit))
-        } else {
-            Ok(String::new()) // no LIMIT clause if not specified  
-        }
-    }
-
-    pub fn build_offset(&self) -> Result<String> {
-        if let Some(offset) = self.offset {
-            Ok(format!(" OFFSET {}", offset))
-        } else {
-            Ok(String::new())
-        }
     }
 }
