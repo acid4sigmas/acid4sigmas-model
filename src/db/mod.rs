@@ -11,6 +11,8 @@ pub trait TableModel: Send + Sync {
         Self: Sized;
     fn debug_string(&self) -> String;
     fn as_value(&self) -> serde_json::Value;
+    fn as_hash_map(&self) -> HashMap<String, serde_json::Value>;
+    fn get_keys_as_hashmap(&self, keys: Vec<&str>) -> HashMap<String, serde_json::Value>;
 }
 
 pub type ModelFactory = fn(&PgRow) -> Box<dyn TableModel + Send + Sync>;

@@ -2,8 +2,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::postgres::PgRow;
 use sqlx::Row;
+use std::collections::HashMap;
 
 use crate::db::TableModel;
+use crate::to_string_;
 
 use acid4sigmas_attr::TableName;
 
@@ -45,5 +47,26 @@ impl TableModel for User {
             "email_verified": self.email_verified,
             "username": self.username
         })
+    }
+    fn as_hash_map(&self) -> HashMap<String, serde_json::Value> {
+        let mut hashmap = HashMap::new();
+        hashmap.insert(to_string_!("uid"), json!(self.uid));
+        hashmap.insert(to_string_!("email"), json!(self.email));
+        hashmap.insert(to_string_!("owner"), json!(self.owner));
+        hashmap.insert(to_string_!("email_verified"), json!(self.email_verified));
+        hashmap.insert(to_string_!("username"), json!(self.username));
+        hashmap
+    }
+    fn get_keys_as_hashmap(&self, keys: Vec<&str>) -> HashMap<String, serde_json::Value> {
+        let map = self.as_hash_map();
+        let mut hashmap = HashMap::new();
+
+        for key in keys {
+            if let Some(value) = map.get(key) {
+                hashmap.insert(key.to_string(), value.clone());
+            }
+        }
+
+        hashmap
     }
 }

@@ -1,9 +1,11 @@
+use crate::to_string_;
 use crate::{db::TableModel, utils::deserializer::custom_deserialize};
 use acid4sigmas_attr::TableName;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::postgres::PgRow;
 use sqlx::Row;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RegisterRequest {
@@ -64,5 +66,26 @@ impl TableModel for AuthUser {
             "username": self.username,
             "password_hash": self.password_hash
         })
+    }
+    fn as_hash_map(&self) -> HashMap<String, serde_json::Value> {
+        let mut hashmap = HashMap::new();
+        hashmap.insert(to_string_!("uid"), json!(self.uid));
+        hashmap.insert(to_string_!("email"), json!(self.email));
+        hashmap.insert(to_string_!("email_verified"), json!(self.email_verified));
+        hashmap.insert(to_string_!("username"), json!(self.username));
+        hashmap.insert(to_string_!("password_hash"), json!(self.password_hash));
+        hashmap
+    }
+    fn get_keys_as_hashmap(&self, keys: Vec<&str>) -> HashMap<String, serde_json::Value> {
+        let map = self.as_hash_map();
+        let mut hashmap = HashMap::new();
+
+        for key in keys {
+            if let Some(value) = map.get(key) {
+                hashmap.insert(key.to_string(), value.clone());
+            }
+        }
+
+        hashmap
     }
 }
