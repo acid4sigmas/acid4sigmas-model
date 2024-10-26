@@ -32,17 +32,6 @@ impl FromStr for OrderDirection {
     }
 }
 
-impl Default for Filters {
-    fn default() -> Self {
-        Filters {
-            where_clause: None,
-            order_by: None,
-            limit: None,
-            offset: None,
-        }
-    }
-}
-
 impl DatabaseRequest {
     pub fn validate(&mut self) -> Result<(), String> {
         // eleminate spaces

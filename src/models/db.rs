@@ -76,3 +76,31 @@ impl DatabaseRequest {
         }
     }
 }
+
+impl Default for Filters {
+    fn default() -> Self {
+        Filters {
+            where_clause: None,
+            order_by: None,
+            limit: None,
+            offset: None,
+        }
+    }
+}
+
+impl Default for DatabaseRequest {
+    fn default() -> Self {
+        DatabaseRequest {
+            table: String::new(),
+            action: DatabaseAction::default(),
+            values: None,
+            filters: None,
+        }
+    }
+}
+
+impl Default for DatabaseAction {
+    fn default() -> Self {
+        DatabaseAction::Retrieve
+    }
+}
