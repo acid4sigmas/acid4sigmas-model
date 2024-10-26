@@ -1,7 +1,7 @@
-use crate::models::db::{DatabaseAction, Filters, OrderDirection, QueryBuilder};
+use crate::models::db::{DatabaseAction, Filters, OrderDirection, QueryBuilder, WhereClause};
 use anyhow::{anyhow, Result};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::{collections::HashMap, f32::consts::PI};
 
 impl QueryBuilder {
     pub fn new(
@@ -180,26 +180,43 @@ impl Filters {
     }
 
     pub fn build_where_caluse(&self, bind_index: &mut usize) -> Result<(String, Vec<Value>)> {
-        let mut conditions = Vec::new();
         let mut bind_values = Vec::new();
 
-        if let Some(where_clause) = &self.where_clause {
-            for (column, value) in where_clause {
-                let sanitized_column = Self::sanitize_column_name(column)?;
+        let where_clause_sql: String = if let Some(where_clause) = &self.where_clause {
+            match where_clause {
+                WhereClause::And(map) | WhereClause::Single(map) => {
+                    let conditions: Vec<String> = map
+                        .iter()
+                        .map(|(column, value)| {
+                            let sanitized_column = Self::sanitize_column_name(column)?;
+                            bind_values.push(value.clone());
+                            *bind_index += 1;
+                            Ok(format!("{} = ${}", sanitized_column, *bind_index - 1))
+                        })
+                        .collect::<Result<Vec<String>>>()?;
 
-                let condition = format!("{} = ${}", sanitized_column, *bind_index);
-                conditions.push(condition);
+                    format!(" WHERE {}", conditions.join(" AND "))
+                }
 
-                bind_values.push(value.clone());
-                *bind_index += 1;
+                WhereClause::Or(map) => {
+                    let conditions: Vec<String> = map
+                        .iter()
+                        .map(|(column, value)| {
+                            let sanitized_column = Self::sanitize_column_name(column)?;
+                            bind_values.push(value.clone());
+                            *bind_index += 1;
+                            Ok(format!("{} = ${}", sanitized_column, *bind_index - 1))
+                        })
+                        .collect::<Result<Vec<String>>>()?;
+
+                    format!(" WHERE ({})", conditions.join(" OR "))
+                }
             }
-        }
-
-        if !conditions.is_empty() {
-            Ok((format!(" WHERE {}", conditions.join(" AND ")), bind_values))
         } else {
-            Ok((String::new(), Vec::new())) // if no conditions, return an empty WHERE clause
-        }
+            String::new()
+        };
+
+        Ok((where_clause_sql, bind_values))
     }
 
     pub fn build_order_by(&self) -> Result<String> {

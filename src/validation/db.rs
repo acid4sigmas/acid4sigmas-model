@@ -1,8 +1,10 @@
 use crate::{
-    models::db::{DatabaseAction, DatabaseRequest, Filters, OrderDirection},
+    models::db::{DatabaseAction, DatabaseRequest, DatabaseResponse, Filters, OrderDirection},
     to_string_,
 };
 use anyhow::Result;
+use serde::Deserialize;
+use serde_json::from_str;
 use std::str::FromStr;
 
 impl FromStr for DatabaseAction {
@@ -74,5 +76,34 @@ impl DatabaseRequest {
         }
 
         Ok(())
+    }
+}
+
+impl<T> DatabaseResponse<T>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    pub fn parse(response: &str) -> Result<Self, String> {
+        println!("{:?}", response);
+        from_str::<DatabaseResponse<T>>(response)
+            .map_err(|e| format!("failed to parse response: {}", e))
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(self, DatabaseResponse::Error { .. })
+    }
+
+    pub fn error_message(&self) -> Option<&str> {
+        match self {
+            DatabaseResponse::Error { error } => Some(error),
+            _ => None,
+        }
+    }
+
+    pub fn get_data(self) -> Option<Vec<T>> {
+        match self {
+            DatabaseResponse::Data(data) => Some(data),
+            _ => None,
+        }
     }
 }
