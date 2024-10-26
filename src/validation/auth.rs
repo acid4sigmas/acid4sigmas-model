@@ -6,7 +6,6 @@ use crate::{
 
 use regex::Regex;
 
-
 impl RegisterRequest {
     pub fn validate(&self) -> Result<(), String> {
         Self::validate_username(&self.username)?;
@@ -16,15 +15,7 @@ impl RegisterRequest {
     }
 
     fn validate_username(username: &str) -> Result<(), String> {
-        let username_regex = Regex::new(r"[a-zA-Z0-9-_]+$").unwrap();
-
-        if !username_regex.is_match(username) {
-            return Err(to_string_!(
-                "only the following characters are allowed: a-z, A-Z, 0-9, _-"
-            ));
-        } else if !username.is_ascii() {
-            return Err(to_string_!("only non-ascii characters are allowed."));
-        }
+        println!("username: {}", username);
 
         let username_len = username.len();
 
@@ -32,6 +23,14 @@ impl RegisterRequest {
             return Err(to_string_!("Username must be at least 3 characters long."));
         } else if username_len > 30 {
             return Err(to_string_!("Username cant be longer than 30 characters"));
+        }
+
+        for c in username.chars() {
+            if !(c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                return Err(to_string_!(
+                    "Only the following characters are allowed: a-z, A-Z, 0-9, _-"
+                ));
+            }
         }
 
         Ok(())
@@ -48,29 +47,46 @@ impl RegisterRequest {
             return Err(to_string_!("your password is too long, max: 64 characters"));
         }
 
-        let digit_regex = Regex::new(r"\d").unwrap();
-        let uppercase_regex = Regex::new(r"[A-Z]").unwrap();
-        let lowercase_regex = Regex::new(r"[a-z]").unwrap();
-        let special_char_regex = Regex::new(r"[!@#$%^&*()\-=+?]").unwrap();
+        let mut has_digit = false;
+        let mut has_uppercase = false;
+        let mut has_lowercase = false;
+        let mut has_special_char = false;
 
-        if !digit_regex.is_match(password) {
-            return Err(to_string_!("password must contain at least one digit."));
+        let special_characters: &[char] = &[
+            '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '=', '+', '?',
+        ];
+
+        for c in password.chars() {
+            if c.is_ascii_digit() {
+                has_digit = true;
+            } else if c.is_ascii_uppercase() {
+                has_uppercase = true;
+            } else if c.is_ascii_lowercase() {
+                has_lowercase = true;
+            } else if special_characters.contains(&c) {
+                has_special_char = true;
+            }
+
+            if has_digit && has_uppercase && has_lowercase && has_special_char {
+                return Ok(());
+            } // exit early and stop the iteration if we have already met all con
         }
 
-        if !uppercase_regex.is_match(password) {
+        if !has_digit {
+            return Err(to_string_!("Password must contain at least one digit."));
+        }
+        if !has_uppercase {
             return Err(to_string_!(
-                "password must contain at least one uppercase letter."
+                "Password must contain at least one uppercase letter."
             ));
         }
-
-        if !lowercase_regex.is_match(password) {
+        if !has_lowercase {
             return Err(to_string_!(
-                "password must contain at least one lowercase letter."
+                "Password must contain at least one lowercase letter."
             ));
         }
-
-        if !special_char_regex.is_match(password) {
-            return Err(to_string_!("password must contain at least one special character. allowed special characters: !@#$%^&*()-_=+?"));
+        if !has_special_char {
+            return Err(to_string_!("Password must contain at least one special character. Allowed special characters: !@#$%^&*()-_=+?"));
         }
 
         Ok(())
@@ -96,18 +112,19 @@ impl RegisterRequest {
                 return Err(to_string_!("the domain part the email is too long"));
             }
 
-            let regex = Regex::new(r"^[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)*$").unwrap();
+            fn check_if_allowed(target: &str) -> Result<(), String> {
+                for c in target.chars() {
+                    if !(c.is_ascii_alphanumeric() || c == '.' || c == '-') {
+                        return Err(to_string_!(
+                            "Email format is wrong. Only letters, digits, dots, and hyphens are allowed."
+                        ));
+                    }
+                }
+                Ok(())
+            }
 
-            if !regex.is_match(&local_part) {
-                return Err(to_string_!(
-                    "email in wrong format. example of an correct email: 'john.doe@example.com'"
-                ));
-            }
-            if !regex.is_match(&domain_part) {
-                return Err(to_string_!(
-                    "email in wrong format. example of an correct email: 'john.doe@example.com"
-                ));
-            }
+            check_if_allowed(&local_part)?;
+            check_if_allowed(&domain_part)?;
 
             return Ok(());
         }
