@@ -15,8 +15,6 @@ impl RegisterRequest {
     }
 
     fn validate_username(username: &str) -> Result<(), String> {
-        println!("username: {}", username);
-
         let username_len = username.len();
 
         if username_len < 3 {
