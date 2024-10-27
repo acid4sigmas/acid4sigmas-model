@@ -16,6 +16,7 @@ pub struct BackendClaims {
 pub struct UserClaims {
     pub user_id: String,
     pub exp: usize,
+    pub jti: String,
 }
 
 impl Claim for UserClaims {
@@ -73,7 +74,7 @@ impl JwtToken {
         exp <= current_timestamp as usize
     }
 
-    fn get_current_timestamp() -> u64 {
+    pub fn get_current_timestamp() -> u64 {
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)

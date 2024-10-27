@@ -73,7 +73,6 @@ where
     T: for<'de> Deserialize<'de>,
 {
     pub fn parse(response: &str) -> Result<Self, String> {
-        println!("{:?}", response);
         from_str::<DatabaseResponse<T>>(response)
             .map_err(|e| format!("failed to parse response: {}", e))
     }
