@@ -1,4 +1,5 @@
 pub mod deserializer;
+pub mod email_client;
 pub mod hasher;
 pub mod jwt;
 pub mod query_builder;

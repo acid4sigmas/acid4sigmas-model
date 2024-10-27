@@ -9,15 +9,11 @@ use crate::to_string_;
 
 #[async_trait::async_trait]
 pub trait TokenHandler<'a, T: Claim> {
-    async fn new(
-        secret_key: &str,
-        expires_in: usize,
-        client: tokio::sync::MutexGuard<'a, WsClient>,
-    ) -> Self
+    async fn new(secret_key: &str, client: tokio::sync::MutexGuard<'a, WsClient>) -> Self
     where
         Self: Sized;
-    async fn generate_token(&mut self, uid: i64) -> anyhow::Result<String>;
-    async fn verify_token(&mut self, token: &str) -> anyhow::Result<T>;
+    async fn generate_token(&mut self, uid: i64, expires_in: usize) -> anyhow::Result<String>;
+    async fn verify_token(&mut self, token: &str) -> Result<T, (String, u16)>;
 }
 
 use anyhow::{anyhow, Result};
@@ -25,23 +21,21 @@ use tokio::sync::MutexGuard;
 
 pub struct UserTokenHandler<'a> {
     pub jwt: JwtToken,
-    pub expires_in: usize,
     pub ws_client: MutexGuard<'a, WsClient>,
 }
 
 #[async_trait::async_trait]
 impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
-    async fn new(secret_key: &str, expires_in: usize, client: MutexGuard<'a, WsClient>) -> Self {
+    async fn new(secret_key: &str, client: MutexGuard<'a, WsClient>) -> Self {
         Self {
             jwt: JwtToken::new(secret_key),
-            expires_in,
             ws_client: client,
         }
     }
 
-    async fn generate_token(&mut self, uid: i64) -> Result<String> {
+    async fn generate_token(&mut self, uid: i64, expires_in: usize) -> Result<String> {
         let jti = uuid::Uuid::new_v4().to_string();
-        let exp = (JwtToken::get_current_timestamp() as usize) + self.expires_in;
+        let exp = (JwtToken::get_current_timestamp() as usize) + expires_in;
 
         let claims = UserClaims {
             user_id: uid.to_string(),
@@ -85,18 +79,18 @@ impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
         self.jwt.create_jwt(&claims).map_err(Into::into)
     }
 
-    async fn verify_token(&mut self, token: &str) -> anyhow::Result<UserClaims> {
+    async fn verify_token(&mut self, token: &str) -> Result<UserClaims, (String, u16)> {
         let decoded_claims = self
             .jwt
             .decode_jwt::<UserClaims>(token)
-            .map_err(|e| anyhow!(e))?;
+            .map_err(|e| (e.to_string(), 401))?;
 
         let user_id_hashmap = {
             let mut hashmap = HashMap::new();
             let uid_i64 = decoded_claims
                 .user_id
                 .parse::<i64>()
-                .map_err(|e| anyhow!(e))?;
+                .map_err(|e| (e.to_string(), 500))?;
             hashmap.insert(to_string_!("uid"), serde_json::json!(uid_i64));
             hashmap
         };
@@ -114,16 +108,16 @@ impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
         let client = &mut self.ws_client;
 
         client
-            .send(&db_request.to_string().map_err(|e| anyhow!(e))?)
+            .send(&db_request.to_string().map_err(|e| (e.to_string(), 500))?)
             .await
-            .map_err(|e| anyhow!(e))?;
+            .map_err(|e| (e.to_string(), 500))?;
 
         if let Some(message) = client.receive().await {
             let db_response = DatabaseResponse::<AuthTokens>::parse(&message.to_string())
-                .map_err(|e| anyhow!(e))?;
+                .map_err(|e| (e.to_string(), 500))?;
 
             if db_response.is_error() {
-                return Err(anyhow!("{}", db_response.error_message().unwrap()));
+                return Err((format!("{}", db_response.error_message().unwrap()), 500));
             }
 
             match db_response {
@@ -139,14 +133,17 @@ impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
                         }
                     }
 
-                    return Err(anyhow!(
-                        "token rejected. could not verify the trustworthiness of this token"
+                    return Err((
+                        to_string_!(
+                            "token rejected. could not verify the trustworthiness of this token"
+                        ),
+                        401,
                     ));
                 }
-                _ => return Err(anyhow!("an unknown database error occurred.")), // if this gets called, make sure to check your previous code, the db-api will not return anything else except an error or the data even if they are empty.
+                _ => return Err((to_string_!("an unknown database error occurred."), 500)), // if this gets called, make sure to check your previous code, the db-api will not return anything else except an error or the data even if they are empty.
             }
         } else {
-            return Err(anyhow!("Database response failed"));
+            return Err((to_string_!("Database response failed"), 500));
         }
     }
 }

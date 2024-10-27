@@ -1,7 +1,7 @@
 use crate::models::db::{DatabaseAction, Filters, OrderDirection, QueryBuilder, WhereClause};
 use anyhow::{anyhow, Result};
 use serde_json::Value;
-use std::{collections::HashMap, f32::consts::PI};
+use std::collections::HashMap;
 
 impl QueryBuilder {
     pub fn new(

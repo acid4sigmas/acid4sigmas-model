@@ -3,8 +3,6 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::db::TableModel;
-
 // the actions we perform for the database
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DatabaseAction {

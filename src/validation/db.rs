@@ -1,5 +1,5 @@
 use crate::{
-    models::db::{DatabaseAction, DatabaseRequest, DatabaseResponse, Filters, OrderDirection},
+    models::db::{DatabaseAction, DatabaseRequest, DatabaseResponse, OrderDirection},
     to_string_,
 };
 use anyhow::Result;
