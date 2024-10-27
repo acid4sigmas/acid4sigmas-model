@@ -89,3 +89,62 @@ impl TableModel for AuthUser {
         hashmap
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, TableName)]
+#[table_name = "auth_tokens"]
+pub struct AuthTokens {
+    pub jti: String,
+    pub uid: i64,
+    pub expires_at: i64,
+}
+
+impl TableModel for AuthTokens {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
+        let uid: i64 = row.try_get("uid")?;
+        println!("uid: {:?}", uid);
+        let jti: String = row.try_get(1)?;
+        println!("jti: {:?}", jti);
+
+        Ok(AuthTokens {
+            jti: row.try_get("jti")?,
+            uid: row.try_get("uid")?,
+            expires_at: row.try_get("expires_at")?,
+        })
+    }
+    fn table_name() -> &'static str {
+        let table = AuthTokens::table_name_();
+        table
+    }
+    fn debug_string(&self) -> String {
+        format!(
+            "AuthToken {{ uid: {}, jti: {}, expires_at: {} }}",
+            self.uid, self.jti, self.expires_at
+        )
+    }
+    fn as_value(&self) -> serde_json::Value {
+        json!({
+            "uid": self.uid,
+            "jti": self.jti,
+            "expires_at": self.expires_at
+        })
+    }
+    fn as_hash_map(&self) -> HashMap<String, serde_json::Value> {
+        let mut hashmap = HashMap::new();
+        hashmap.insert(to_string_!("uid"), json!(self.uid));
+        hashmap.insert(to_string_!("jti"), json!(self.jti));
+        hashmap.insert(to_string_!("expires_at"), json!(self.expires_at));
+        hashmap
+    }
+    fn get_keys_as_hashmap(&self, keys: Vec<&str>) -> HashMap<String, serde_json::Value> {
+        let map = self.as_hash_map();
+        let mut hashmap = HashMap::new();
+
+        for key in keys {
+            if let Some(value) = map.get(key) {
+                hashmap.insert(key.to_string(), value.clone());
+            }
+        }
+
+        hashmap
+    }
+}
