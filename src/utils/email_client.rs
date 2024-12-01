@@ -47,3 +47,20 @@ impl EmailClient {
         Ok(())
     }
 }
+
+use std::fs;
+
+pub struct HtmlCodeRenderer {
+    pub html: String,
+}
+
+impl HtmlCodeRenderer {
+    pub fn new(path: &str) -> Result<Self> {
+        let html = fs::read_to_string(&path)?;
+        Ok(Self { html })
+    }
+
+    pub fn insert_code(&self, code: &str) -> String {
+        self.html.replace("{code}", code) // replace the string in the html with our code
+    }
+}

@@ -1,5 +1,7 @@
+use std::str::FromStr;
+
 use crate::{
-    models::auth::{LoginIdentifier, RegisterRequest},
+    models::auth::{LoginIdentifier, RegisterRequest, TwoFaType},
     to_string_,
     utils::deserializer::CustomDeserializable,
 };
@@ -141,6 +143,27 @@ impl CustomDeserializable for LoginIdentifier {
             Ok(LoginIdentifier::Email(to_string_!(input)))
         } else {
             Ok(LoginIdentifier::Username(to_string_!(input)))
+        }
+    }
+}
+
+impl FromStr for TwoFaType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "password" => Ok(TwoFaType::Password),
+            "email" => Ok(TwoFaType::Email),
+            _ => Err(format!("invalid twofa_type: {}", s)),
+        }
+    }
+}
+
+impl TwoFaType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TwoFaType::Email => "email",
+            TwoFaType::Password => "password",
         }
     }
 }

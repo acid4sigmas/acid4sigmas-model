@@ -1,4 +1,6 @@
-use crate::models::db::{DatabaseAction, Filters, OrderDirection, QueryBuilder, WhereClause};
+use crate::models::db::{
+    DatabaseAction, DeleteAction, Filters, OrderDirection, QueryBuilder, WhereClause,
+};
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -36,7 +38,9 @@ impl QueryBuilder {
 
         let mut bind_index = 1;
 
-        match self.action {
+        // clone right here to defeat the borrow checker
+        // (performance cost is acceptable)
+        match &self.action.clone() {
             DatabaseAction::Retrieve => query = format!("SELECT * FROM {}", self.table),
             DatabaseAction::Update => {
                 query = self.build_update_set(&mut bind_index)?;
@@ -44,7 +48,14 @@ impl QueryBuilder {
             DatabaseAction::Insert => {
                 query = self.build_insert_query(&mut bind_index)?;
             }
-            _ => return Err(anyhow!("Action not implemented")),
+            DatabaseAction::Delete(action) => {
+                query = self.build_delete_query(action)?;
+                // dereference to compare
+                // if action equals DeleteTable we may want to exit early since a DROP TABLE does not support WHERE clauses or any other filters
+                if *action == DeleteAction::DeleteTable {
+                    return Ok((query, Vec::new())); // return the query and an empty vec since no bind values are expected at a DROP TABLE
+                }
+            }
         }
 
         // putting it all together
@@ -165,6 +176,21 @@ impl QueryBuilder {
             self.table,
             set_clauses.join(", ")
         ))
+    }
+
+    fn build_delete_query(&mut self, del_action: &DeleteAction) -> Result<String> {
+        match del_action {
+            DeleteAction::DeleteTable => Ok(format!("DROP TABLE {}", self.table)),
+            DeleteAction::DeleteValue => {
+                if let Some(_filters) = self.filters.as_ref().and_then(|f| f.where_clause.as_ref())
+                {
+                    Ok(format!("DELETE FROM {}", self.table))
+                } else {
+                    // if there are no filters
+                    Ok(format!("TRUNCATE TABLE {}", self.table))
+                }
+            }
+        }
     }
 }
 

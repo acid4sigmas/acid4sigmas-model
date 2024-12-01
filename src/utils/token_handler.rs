@@ -1,15 +1,16 @@
-use std::collections::HashMap;
-
 use super::jwt::{Claim, JwtToken, UserClaims};
 use super::ws::WsClient;
 use crate::db::TableModel;
 use crate::models::auth::AuthTokens;
 use crate::models::db::{DatabaseAction, DatabaseRequest, DatabaseResponse, Filters, WhereClause};
 use crate::to_string_;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[async_trait::async_trait]
-pub trait TokenHandler<'a, T: Claim> {
-    async fn new(secret_key: &str, client: tokio::sync::MutexGuard<'a, WsClient>) -> Self
+pub trait TokenHandler<T: Claim> {
+    async fn new(secret_key: &str, client: Arc<Mutex<WsClient>>) -> Self
     where
         Self: Sized;
     async fn generate_token(&mut self, uid: i64, expires_in: usize) -> anyhow::Result<String>;
@@ -17,16 +18,15 @@ pub trait TokenHandler<'a, T: Claim> {
 }
 
 use anyhow::{anyhow, Result};
-use tokio::sync::MutexGuard;
 
-pub struct UserTokenHandler<'a> {
+pub struct UserTokenHandler {
     pub jwt: JwtToken,
-    pub ws_client: MutexGuard<'a, WsClient>,
+    pub ws_client: Arc<Mutex<WsClient>>, // Use Arc<Mutex<WsClient>> instead of MutexGuard
 }
 
 #[async_trait::async_trait]
-impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
-    async fn new(secret_key: &str, client: MutexGuard<'a, WsClient>) -> Self {
+impl TokenHandler<UserClaims> for UserTokenHandler {
+    async fn new(secret_key: &str, client: Arc<Mutex<WsClient>>) -> Self {
         Self {
             jwt: JwtToken::new(secret_key),
             ws_client: client,
@@ -57,14 +57,23 @@ impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
             ..Default::default()
         };
 
-        let client = &mut self.ws_client;
+        {
+            let mut client = self.ws_client.lock().await;
+            client
+                .send(&db_request.to_string().map_err(|e| anyhow!(e))?)
+                .await
+                .map_err(|e| anyhow!(e))?;
+        }
 
-        client
-            .send(&db_request.to_string().map_err(|e| anyhow!(e))?)
-            .await
-            .map_err(|e| anyhow!(e))?;
+        let message = {
+            let mut client = self.ws_client.lock().await;
+            client.receive().await
+        };
 
-        if let Some(message) = client.receive().await {
+        // we are creating anytime a new lock and drop it immediately if not needed anymore to avoid locking delays
+        // this will keep locking delays as short as possible
+
+        if let Some(message) = message {
             let db_response = DatabaseResponse::<AuthTokens>::parse(&message.to_string())
                 .map_err(|e| anyhow!(e))?;
 
@@ -105,14 +114,20 @@ impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
             ..Default::default()
         };
 
-        let client = &mut self.ws_client;
+        {
+            let mut client = self.ws_client.lock().await;
+            client
+                .send(&db_request.to_string().map_err(|e| (e.to_string(), 500))?)
+                .await
+                .map_err(|e| (e.to_string(), 500))?;
+        } // Release the lock explicitly here so other parts of the application can use the lock
 
-        client
-            .send(&db_request.to_string().map_err(|e| (e.to_string(), 500))?)
-            .await
-            .map_err(|e| (e.to_string(), 500))?;
+        let message = {
+            let mut client = self.ws_client.lock().await;
+            client.receive().await
+        };
 
-        if let Some(message) = client.receive().await {
+        if let Some(message) = message {
             let db_response = DatabaseResponse::<AuthTokens>::parse(&message.to_string())
                 .map_err(|e| (e.to_string(), 500))?;
 
@@ -122,14 +137,9 @@ impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
 
             match db_response {
                 DatabaseResponse::Data(token_props) => {
-                    // we compare our token identifiers from the Database
-                    // with the token identifiers from the claims
-                    // if the token identifier matches with one of the claims
-                    // we know that this token has been signed by our backend and is trustworthy
-
                     for token_prop in token_props {
                         if token_prop.jti == decoded_claims.jti {
-                            return Ok(decoded_claims); // if the jti matches, we know this is a trustworthy token, therefore, we return Ok with the claims
+                            return Ok(decoded_claims);
                         }
                     }
 
@@ -140,7 +150,7 @@ impl<'a> TokenHandler<'a, UserClaims> for UserTokenHandler<'a> {
                         401,
                     ));
                 }
-                _ => return Err((to_string_!("an unknown database error occurred."), 500)), // if this gets called, make sure to check your previous code, the db-api will not return anything else except an error or the data even if they are empty.
+                _ => return Err((to_string_!("an unknown database error occurred."), 500)),
             }
         } else {
             return Err((to_string_!("Database response failed"), 500));

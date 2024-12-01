@@ -28,6 +28,12 @@ pub enum LoginIdentifier {
     Email(String),
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+pub enum TwoFaType {
+    Password,
+    Email,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, TableName)]
 #[table_name = "auth_users"]
 pub struct AuthUser {
@@ -100,11 +106,6 @@ pub struct AuthTokens {
 
 impl TableModel for AuthTokens {
     fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
-        let uid: i64 = row.try_get("uid")?;
-        println!("uid: {:?}", uid);
-        let jti: String = row.try_get(1)?;
-        println!("jti: {:?}", jti);
-
         Ok(AuthTokens {
             jti: row.try_get("jti")?,
             uid: row.try_get("uid")?,

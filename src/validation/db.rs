@@ -1,5 +1,5 @@
 use crate::{
-    models::db::{DatabaseAction, DatabaseRequest, DatabaseResponse, OrderDirection},
+    models::db::{DatabaseAction, DatabaseRequest, DatabaseResponse, DeleteAction, OrderDirection},
     to_string_,
 };
 use anyhow::Result;
@@ -13,7 +13,8 @@ impl FromStr for DatabaseAction {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "insert" => Ok(DatabaseAction::Insert),
-            "delete" => Ok(DatabaseAction::Delete),
+            "delete_value" => Ok(DatabaseAction::Delete(DeleteAction::DeleteValue)),
+            "delete_table" => Ok(DatabaseAction::Delete(DeleteAction::DeleteTable)),
             "update" => Ok(DatabaseAction::Update),
             _ => Err(format!("invalid database_action type: {}", s)),
         }
@@ -49,13 +50,13 @@ impl DatabaseRequest {
         // conver to lowercase chars
         self.table = self.table.to_ascii_lowercase();
 
-        match self.action {
+        match &self.action {
             DatabaseAction::Insert => {
                 if self.values.is_none() || self.values.as_ref().unwrap().is_empty() {
                     return Err(to_string_!("Insert action requires non-empty values."));
                 }
             }
-            DatabaseAction::Delete => {}
+            DatabaseAction::Delete(_action) => {}
             DatabaseAction::Update => {
                 if self.values.is_none() || self.values.as_ref().unwrap().is_empty() {
                     return Err(to_string_!("Update action requires non-empty values."));

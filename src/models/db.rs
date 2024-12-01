@@ -3,11 +3,17 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DeleteAction {
+    DeleteTable,
+    DeleteValue,
+}
+
 // the actions we perform for the database
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DatabaseAction {
     Insert,
-    Delete,
+    Delete(DeleteAction),
     Update,
     Retrieve,
 }
