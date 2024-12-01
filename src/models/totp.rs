@@ -19,6 +19,6 @@ pub enum TotpRedisAction {
 }
 
 pub struct TotpRequest {
-    twofa_type: TwoFaType,
-    action: TotpRedisAction,
+    _twofa_type: TwoFaType,
+    _action: TotpRedisAction,
 }
