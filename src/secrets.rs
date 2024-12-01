@@ -1,5 +1,7 @@
+use anyhow::anyhow;
 use colored::*;
 use once_cell::sync::OnceCell;
+use std::env;
 use std::fs::read_to_string;
 use toml::Value;
 
@@ -21,109 +23,54 @@ fn load_secret(data: &Value, key: &str) -> Option<String> {
     data.get(key)
         .and_then(|val| val.as_str().map(|s| s.to_string()))
 }
-pub fn init_secrets(path: &str) {
-    let contents = read_to_string(path).expect("failed to read Secrets.toml");
-    let data: Value = contents.parse().expect("failed to parse Secrets.toml");
+pub fn init_secrets(path: &str) -> anyhow::Result<()> {
+    let contents = read_to_string(path).map_err(|e| {
+        let current_dir = env::current_dir()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| "unknown".to_string());
+        anyhow!(
+            "Failed to read Secrets.toml from path '{}'. Current working directory: '{}'. Error: {}",
+            path,
+            current_dir,
+            e
+        )
+    })?;
+
+    // Attempt to parse the file
+    let data: Value = contents
+        .parse()
+        .map_err(|e| anyhow!("Failed to parse Secrets.toml: {}", e))?;
 
     println!(
         "{}",
         "[info] missing keys are treated as empty strings.".blue()
     );
 
-    if let Some(secret) = load_secret(&data, "SECRET_KEY") {
-        SECRET_KEY
-            .set(secret)
-            .expect("SECRET_KEY is already initialized");
-    } else {
-        println!("{}", "[warning] no SECRET_KEY found".yellow());
-        SECRET_KEY
-            .set(String::new())
-            .expect("Failed to set empty SECRET_KEY");
+    macro_rules! set_or_warn {
+        ($cell:expr, $key:expr) => {
+            if let Some(value) = load_secret(&data, $key) {
+                $cell
+                    .set(value)
+                    .expect(concat!($key, " is already initialized"));
+            } else {
+                println!("{}", format!("[warning] no {} found", $key).yellow());
+                $cell
+                    .set(String::new())
+                    .expect(concat!("Failed to set empty ", $key));
+            }
+        };
     }
 
-    if let Some(db_name) = load_secret(&data, "DB_NAME") {
-        DB_NAME
-            .set(db_name)
-            .expect("DB_NAME is already initialized");
-    } else {
-        println!("{}", "[warning] no DB_NAME found".yellow());
-        DB_NAME
-            .set(String::new())
-            .expect("Failed to set empty DB_NAME");
-    }
-
-    if let Some(db_pw) = load_secret(&data, "DB_PW") {
-        DB_PW.set(db_pw).expect("DB_PW is already initialized");
-    } else {
-        println!("{}", "[warning] no DB_PW found".yellow());
-        DB_PW.set(String::new()).expect("Failed to set empty DB_PW");
-    }
-
-    if let Some(db_port) = load_secret(&data, "DB_PORT") {
-        DB_PORT
-            .set(db_port)
-            .expect("DB_PORT is already initialized");
-    } else {
-        println!("{}", "[warning] no DB_PORT found".yellow());
-        DB_PORT
-            .set(String::new())
-            .expect("Failed to set empty DB_PORT");
-    }
-
-    if let Some(no_reply_email) = load_secret(&data, "NO_REPLY_EMAIL") {
-        NO_REPLY_EMAIL
-            .set(no_reply_email)
-            .expect("NO_REPLY_EMAIL is already initialized");
-    } else {
-        println!("{}", "[warning] no NO_REPLY_EMAIL found".yellow());
-        NO_REPLY_EMAIL
-            .set(String::new())
-            .expect("Failed to set empty NO_REPLY_EMAIL");
-    }
-
-    if let Some(smtp_username) = load_secret(&data, "SMTP_USERNAME") {
-        SMTP_USERNAME
-            .set(smtp_username)
-            .expect("SMTP_USERNAME is already initialized");
-    } else {
-        println!("{}", "[warning] no SMTP_USERNAME found".yellow());
-        SMTP_USERNAME
-            .set(String::new())
-            .expect("Failed to set empty SMTP_USERNAME");
-    }
-
-    if let Some(smtp_password) = load_secret(&data, "SMTP_PASSWORD") {
-        SMTP_PASSWORD
-            .set(smtp_password)
-            .expect("SMTP_PASSWORD is already initialized");
-    } else {
-        println!("{}", "[warning] no SMTP_PASSWORD found".yellow());
-        SMTP_PASSWORD
-            .set(String::new())
-            .expect("Failed to set empty SMTP_PASSWORD");
-    }
-
-    if let Some(smtp_relay) = load_secret(&data, "SMTP_RELAY") {
-        SMTP_RELAY
-            .set(smtp_relay)
-            .expect("SMTP_RELAY is already initialized");
-    } else {
-        println!("{}", "[warning] no SMTP_RELAY found".yellow());
-        SMTP_RELAY
-            .set(String::new())
-            .expect("Failed to set empty SMTP_RELAY");
-    }
-
-    if let Some(db_ws_url) = load_secret(&data, "DB_WS_URL") {
-        DB_WS_URL
-            .set(db_ws_url)
-            .expect("DB_WS_URL is already initialized");
-    } else {
-        println!("{}", "[warning] no DB_WS_URL found".yellow());
-        DB_WS_URL
-            .set(String::new())
-            .expect("Failed to set empty DB_WS_URL");
-    }
+    set_or_warn!(SECRET_KEY, "SECRET_KEY");
+    set_or_warn!(DB_NAME, "DB_NAME");
+    set_or_warn!(DB_PW, "DB_PW");
+    set_or_warn!(DB_PORT, "DB_PORT");
+    set_or_warn!(NO_REPLY_EMAIL, "NO_REPLY_EMAIL");
+    set_or_warn!(SMTP_USERNAME, "SMTP_USERNAME");
+    set_or_warn!(SMTP_PASSWORD, "SMTP_PASSWORD");
+    set_or_warn!(SMTP_RELAY, "SMTP_RELAY");
+    set_or_warn!(DB_WS_URL, "DB_WS_URL");
+    set_or_warn!(OWNER, "OWNER");
 
     if let Some(repos) = load_repos(&data) {
         REPO.set(repos).expect("REPO is already initialized");
@@ -132,12 +79,7 @@ pub fn init_secrets(path: &str) {
         REPO.set(String::new()).expect("Failed to set empty REPO");
     }
 
-    if let Some(owner) = load_secret(&data, "OWNER") {
-        OWNER.set(owner).expect("OWNER is already initialized");
-    } else {
-        println!("{}", "[warning] no OWNER found".yellow());
-        OWNER.set(String::new()).expect("Failed to set empty OWNER");
-    }
+    Ok(())
 }
 
 fn load_repos(data: &Value) -> Option<String> {
