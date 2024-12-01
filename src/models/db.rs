@@ -13,6 +13,7 @@ pub enum DeleteAction {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DatabaseAction {
     Insert,
+    BulkInsert,
     Delete(DeleteAction),
     Update,
     Retrieve,
@@ -53,6 +54,7 @@ pub struct DatabaseRequest {
     pub table: String,
     pub action: DatabaseAction,
     pub values: Option<HashMap<String, Value>>,
+    pub bulk_values: Option<Vec<HashMap<String, Value>>>,
     pub filters: Option<Filters>,
 }
 
@@ -63,13 +65,34 @@ pub enum DatabaseResponse<T> {
     Data(Vec<T>),
 }
 
+pub type Values = HashMap<String, Value>;
+pub type BulkValues = Vec<HashMap<String, Value>>;
+pub type TableColumns = HashMap<String, String>;
+
 pub struct QueryBuilder {
     pub table: String,
     pub action: DatabaseAction,
     pub filters: Option<Filters>,
-    pub values: Option<HashMap<String, Value>>,
-    pub table_columns: Option<HashMap<String, String>>,
+    pub bulk_values: Option<BulkValues>,
+    pub values: Option<Values>,
+    pub table_columns: Option<TableColumns>,
     pub bind_params: Vec<Value>,
+}
+
+pub type BuildQuery = (String, Vec<Value>);
+
+impl Default for QueryBuilder {
+    fn default() -> Self {
+        Self {
+            table: String::new(),
+            action: DatabaseAction::default(),
+            filters: None,
+            bulk_values: None,
+            values: None,
+            table_columns: None,
+            bind_params: vec![],
+        }
+    }
 }
 
 impl DatabaseRequest {
@@ -97,6 +120,7 @@ impl Default for DatabaseRequest {
         DatabaseRequest {
             table: String::new(),
             action: DatabaseAction::default(),
+            bulk_values: None,
             values: None,
             filters: None,
         }

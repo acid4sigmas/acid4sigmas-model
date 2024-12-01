@@ -51,6 +51,13 @@ impl DatabaseRequest {
         self.table = self.table.to_ascii_lowercase();
 
         match &self.action {
+            DatabaseAction::BulkInsert => {
+                if self.bulk_values.is_none() {
+                    return Err(to_string_!(
+                        "BulkInsert action requires bulk_insert property"
+                    ));
+                }
+            }
             DatabaseAction::Insert => {
                 if self.values.is_none() || self.values.as_ref().unwrap().is_empty() {
                     return Err(to_string_!("Insert action requires non-empty values."));

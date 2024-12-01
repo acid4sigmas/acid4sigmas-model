@@ -1,21 +1,27 @@
 use crate::models::db::{
-    DatabaseAction, DeleteAction, Filters, OrderDirection, QueryBuilder, WhereClause,
+    BuildQuery, BulkValues, DatabaseAction, DeleteAction, Filters, OrderDirection, QueryBuilder,
+    TableColumns, Values, WhereClause,
 };
 use anyhow::{anyhow, Result};
 use serde_json::Value;
-use std::collections::HashMap;
 
 impl QueryBuilder {
+    pub fn from(query_builder: QueryBuilder) -> Self {
+        query_builder
+    }
+
     pub fn new(
         table: String,
         action: DatabaseAction,
-        values: Option<HashMap<String, Value>>,
-        table_columns: Option<HashMap<String, String>>,
+        bulk_values: Option<BulkValues>,
+        values: Option<Values>,
+        table_columns: Option<TableColumns>,
         filters: Option<Filters>,
     ) -> Self {
         Self {
             table,
             action,
+            bulk_values,
             values,
             filters,
             table_columns,
@@ -23,7 +29,7 @@ impl QueryBuilder {
         }
     }
 
-    pub fn build_query(&mut self) -> Result<(String, Vec<Value>)> {
+    pub fn build_query(&mut self) -> Result<BuildQuery> {
         /*
         ==========================================
         = DANGER: POTENTIAL SQL INJECTION RISK! =
@@ -44,6 +50,9 @@ impl QueryBuilder {
             DatabaseAction::Retrieve => query = format!("SELECT * FROM {}", self.table),
             DatabaseAction::Update => {
                 query = self.build_update_set(&mut bind_index)?;
+            }
+            DatabaseAction::BulkInsert => {
+                query = self.build_bulk_insert_query(&mut bind_index)?;
             }
             DatabaseAction::Insert => {
                 query = self.build_insert_query(&mut bind_index)?;
@@ -109,6 +118,62 @@ impl QueryBuilder {
             }
             _ => Err(anyhow!("Unsupported column type: {}", expected_type)),
         }
+    }
+
+    fn build_bulk_insert_query(&mut self, _bind_index: &mut usize) -> Result<String> {
+        let bulk_values = self
+            .bulk_values
+            .as_ref()
+            .ok_or(anyhow!("No bulk values provided for insert"))?;
+
+        let table_columns = self
+            .table_columns
+            .as_ref()
+            .ok_or(anyhow!("No table columns provided"))?;
+
+        if bulk_values.is_empty() {
+            return Err(anyhow!("Bulk values cannot be empty"));
+        }
+
+        let columns: Vec<String> = bulk_values[0].keys().cloned().collect();
+
+        let mut value_sets: Vec<String> = Vec::new();
+
+        for row in bulk_values {
+            let mut row_placeholders: Vec<String> = Vec::new();
+            let mut row_bind_params: Vec<serde_json::Value> = Vec::new();
+
+            for column in &columns {
+                let value = row
+                    .get(column)
+                    .ok_or(anyhow!("Missing value for column {} in row", column))?;
+
+                let expected_type = table_columns.get(column).ok_or(anyhow!(
+                    "Column {} does not exist in table {}",
+                    column,
+                    self.table
+                ))?;
+
+                let converted_value = self.convert_value(column, value, expected_type)?;
+                row_bind_params.push(converted_value);
+
+                row_placeholders.push(format!("${}", _bind_index));
+                *_bind_index += 1;
+            }
+
+            value_sets.push(format!("({})", row_placeholders.join(", ")));
+
+            self.bind_params.extend(row_bind_params);
+        }
+
+        let query = format!(
+            "INSERT INTO {} ({}) VALUES {}",
+            self.table,
+            columns.join(", "),
+            value_sets.join(", ")
+        );
+
+        Ok(query)
     }
 
     fn build_insert_query(&mut self, _bind_index: &mut usize) -> Result<String> {
